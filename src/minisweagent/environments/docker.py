@@ -110,7 +110,12 @@ class DockerEnvironment:
                 cmd.extend(["-e", f"{key}={value}"])
         for key, value in self.config.env.items():
             cmd.extend(["-e", f"{key}={value}"])
-        cmd.extend([self.container_id, *self.config.interpreter, command])
+        if "COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT" in command:
+            cmd.extend([self.container_id, *self.config.interpreter, command])
+        else:
+            interpreter_cmd = " ".join(self.config.interpreter)
+            full_command = f"source ~/.bashrc && {interpreter_cmd} {command}"
+            cmd.extend([self.container_id, "bash", "-c", full_command])
 
         try:
             result = subprocess.run(
