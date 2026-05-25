@@ -205,6 +205,27 @@ def test_docker_environment_command_failure(executable):
         env.cleanup()
 
 
+def test_docker_environment_raises_when_container_stops():
+    """Test that a stopped container terminates the environment instead of returning command output."""
+    with patch.object(DockerEnvironment, "_start_container"):
+        env = DockerEnvironment(image="python:3.11")
+    env.container_id = "missing-container"
+
+    def run(cmd, **kwargs):
+        if cmd[1] == "exec":
+            return subprocess.CompletedProcess(cmd, 1, stdout="No such container: missing-container\n")
+        return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="No such object: missing-container\n")
+
+    try:
+        with (
+            patch("minisweagent.environments.docker.subprocess.run", side_effect=run),
+            pytest.raises(RuntimeError, match="Container missing-container stopped"),
+        ):
+            env.execute({"command": "pytest"})
+    finally:
+        env.container_id = None
+
+
 @pytest.mark.slow
 @pytest.mark.parametrize("executable", environment_params)
 def test_docker_environment_custom_container_timeout(executable):
