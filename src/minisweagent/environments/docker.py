@@ -156,6 +156,10 @@ class DockerEnvironment:
             message = (output.get("output") or result.stderr or result.stdout).strip()
             raise RuntimeError(f"Container {self.container_id} stopped before command completed: {message}")
 
+    def wait_until_stopped(self) -> None:
+        assert self.container_id, "Container not started"
+        subprocess.run([self.config.executable, "wait", self.container_id], capture_output=True, text=True)
+
     def _check_finished(self, output: dict):
         """Raises Submitted if the output indicates task completion."""
         lines = output.get("output", "").lstrip().splitlines(keepends=True)

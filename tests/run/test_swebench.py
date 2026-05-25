@@ -1,5 +1,6 @@
 import json
 import re
+import threading
 from unittest.mock import patch
 
 import pytest
@@ -12,6 +13,7 @@ from minisweagent.run.benchmarks.swebench import (
     get_swebench_docker_image_name,
     main,
     remove_from_preds_file,
+    run_agent_until_environment_stops,
     update_preds_file,
 )
 
@@ -28,6 +30,30 @@ def _make_model_from_fixture(text_outputs: list[str], cost_per_call: float = 1.0
         cost_per_call=cost_per_call,
         **kwargs,
     )
+
+
+def test_run_agent_until_environment_stops_before_agent_returns():
+    """Test that a stopped environment terminates the case before a blocked agent returns."""
+
+    class WaitingAgent:
+        def __init__(self):
+            self.started = threading.Event()
+
+        def run(self, task: str) -> dict:
+            self.started.set()
+            threading.Event().wait()
+            return {"exit_status": "done", "submission": task}
+
+    class StoppingEnvironment:
+        def __init__(self, agent: WaitingAgent):
+            self.agent = agent
+
+        def wait_until_stopped(self) -> None:
+            assert self.agent.started.wait(1)
+
+    agent = WaitingAgent()
+    with pytest.raises(RuntimeError, match="Environment stopped before agent finished"):
+        run_agent_until_environment_stops(agent, StoppingEnvironment(agent), "task")
 
 
 @pytest.mark.slow
