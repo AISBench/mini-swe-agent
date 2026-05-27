@@ -139,8 +139,26 @@ class DockerEnvironment:
                 "exception_info": f"An error occurred while executing the command: {e}",
                 "extra": {"exception_type": type(e).__name__, "exception": str(e)},
             }
+        self._raise_if_container_stopped(output)
         self._check_finished(output)
         return output
+
+    def _raise_if_container_stopped(self, output: dict[str, Any]) -> None:
+        if output["returncode"] == 0 or not self.container_id:
+            return
+        result = subprocess.run(
+            [self.config.executable, "inspect", "-f", "{{.State.Running}}", self.container_id],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if result.returncode != 0 or result.stdout.strip().lower() != "true":
+            message = (output.get("output") or result.stderr or result.stdout).strip()
+            raise RuntimeError(f"Container {self.container_id} stopped before command completed: {message}")
+
+    def wait_until_stopped(self) -> None:
+        assert self.container_id, "Container not started"
+        subprocess.run([self.config.executable, "wait", self.container_id], capture_output=True, text=True)
 
     def _check_finished(self, output: dict):
         """Raises Submitted if the output indicates task completion."""

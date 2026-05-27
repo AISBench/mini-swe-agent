@@ -5,6 +5,7 @@
 
 import concurrent.futures
 import json
+import queue
 import random
 import re
 import threading
@@ -133,6 +134,30 @@ def remove_from_preds_file(output_path: Path, instance_id: str):
             output_path.write_text(json.dumps(output_data, indent=2))
 
 
+def run_agent_until_environment_stops(agent: ProgressTrackingAgent, env: Environment, task: str) -> dict:
+    result_queue: queue.Queue[tuple[str, dict | Exception]] = queue.Queue()
+
+    def run_agent() -> None:
+        try:
+            result_queue.put(("result", agent.run(task)))
+        except Exception as e:
+            result_queue.put(("exception", e))
+
+    def wait_until_stopped() -> None:
+        wait = getattr(env, "wait_until_stopped", None)
+        if wait is None:
+            return
+        wait()
+        result_queue.put(("environment_stopped", RuntimeError("Environment stopped before agent finished")))
+
+    threading.Thread(target=run_agent, daemon=True).start()
+    threading.Thread(target=wait_until_stopped, daemon=True).start()
+    kind, value = result_queue.get()
+    if kind == "result":
+        return value
+    raise value
+
+
 def process_instance(
     instance: dict,
     output_dir: Path,
@@ -165,7 +190,7 @@ def process_instance(
             instance_id=instance_id,
             **config.get("agent", {}),
         )
-        info = agent.run(task)
+        info = run_agent_until_environment_stops(agent, env, task)
         exit_status = info.get("exit_status")
         result = info.get("submission")
     except Exception as e:
