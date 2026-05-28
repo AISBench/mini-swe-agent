@@ -114,7 +114,8 @@ class DockerEnvironment:
             cmd.extend([self.container_id, *self.config.interpreter, command])
         else:
             interpreter_cmd = " ".join(self.config.interpreter)
-            full_command = f"source ~/.bashrc && {interpreter_cmd} {command}"
+            # 关键修复：给 command 整体加一层双引号确保能保住原来的语法
+            full_command = f'source ~/.bashrc && {interpreter_cmd} "{command}"'
             cmd.extend([self.container_id, "bash", "-c", full_command])
 
         try:
