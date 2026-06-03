@@ -113,10 +113,16 @@ class DockerEnvironment:
         if "COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT" in command:
             cmd.extend([self.container_id, *self.config.interpreter, command])
         else:
+            import shlex
             interpreter_cmd = " ".join(self.config.interpreter)
-            # 关键修复：给 command 整体加一层双引号确保能保住原来的语法
-            full_command = f'source ~/.bashrc && {interpreter_cmd} "{command}"'
+            # 安全转义：自动处理所有引号、换行、特殊字符
+            escaped_command = shlex.quote(command)
+            full_command = f'source ~/.bashrc && {interpreter_cmd} {escaped_command}'
             cmd.extend([self.container_id, "bash", "-c", full_command])
+            #interpreter_cmd = " ".join(self.config.interpreter)
+            ## 关键修复：给 command 整体加一层双引号确保能保住原来的语法
+            #full_command = f'source ~/.bashrc && {interpreter_cmd} "{command}"'
+            #cmd.extend([self.container_id, "bash", "-c", full_command])
 
         try:
             result = subprocess.run(
